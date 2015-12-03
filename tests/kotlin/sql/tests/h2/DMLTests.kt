@@ -164,7 +164,7 @@ class DMLTests : DatabaseTestsBase() {
     @Test fun testJoin01() {
         withCitiesAndUsers { cities, users, userData ->
             (users join cities).slice(users.name, cities.name).
-            select{(users.id.eq("andrey") or users.name.eq("Sergey")) and users.cityId.eq(cities.id)} forEach {
+            select{(users.id.eq("andrey") or users.name.eq("Sergey")) and users.cityId.eq(cities.id)}.forEach {
                 val userName = it[users.name]
                 val cityName = it[cities.name]
                 when (userName) {
@@ -234,7 +234,7 @@ class DMLTests : DatabaseTestsBase() {
 
     @Test fun testGroupBy01() {
         withCitiesAndUsers { cities, users, userData ->
-            (cities join users).slice(cities.name, users.id.count()).selectAll() groupBy cities.name forEach {
+            ((cities join users).slice(cities.name, users.id.count()).selectAll() groupBy cities.name).forEach {
                 val cityName = it[cities.name]
                 val userCount = it[users.id.count()]
 
@@ -662,7 +662,7 @@ class DMLTests : DatabaseTestsBase() {
             }
 
             tbl.checkRow(tbl.select{tbl.nn.eq(42)}.single(), 42, 42, date, date, time, time, eOne, eOne, sTest, sTest, dec, dec)
-            tbl.checkRow(tbl.select{tbl.nn neq null as Int?}.single(), 42, 42, date, date, time, time, eOne, eOne, sTest, sTest, dec, dec)
+            tbl.checkRow(tbl.select{tbl.nn neq null }.single(), 42, 42, date, date, time, time, eOne, eOne, sTest, sTest, dec, dec)
 
             tbl.checkRow(tbl.select{tbl.dn.eq(date)}.single(), 42, 42, date, date, time, time, eOne, eOne, sTest, sTest, dec, dec)
             tbl.checkRow(tbl.select{tbl.dn.isNotNull()}.single(), 42, 42, date, date, time, time, eOne, eOne, sTest, sTest, dec, dec)
@@ -739,6 +739,17 @@ class DMLTests : DatabaseTestsBase() {
 
             val row = tbl.select { tbl.n eq 101 }.single()
             tbl.checkRow(row, 101, null, date, null, time, null, eOne, null, "23456789", "3456789", dec, null)
+        }
+    }
+
+    @Test fun testJoinWithAlias01() {
+        withCitiesAndUsers {  cities, users, userData ->
+            val usersAlias = users.alias("u2")
+            val resultRow = Join(users).join(usersAlias, JoinType.LEFT, usersAlias[users.id], stringLiteral("smth"))
+                    .select { users.id eq "alex" }.single()
+
+            assert(resultRow[users.name] == "Alex")
+            assert(resultRow[usersAlias[users.name]] == "Something")
         }
     }
 }
