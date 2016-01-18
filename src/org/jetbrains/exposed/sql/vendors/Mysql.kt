@@ -1,14 +1,14 @@
 package org.jetbrains.exposed.sql.vendors
 
-import java.util.*
 import org.jetbrains.exposed.sql.*
+import java.util.*
 
 /**
  * User: Andrey.Tarashevskiy
  * Date: 08.05.2015
  */
 
-internal object MysqlDialect : VendorDialect() {
+internal object MysqlDialect : VendorDialect("mysql") {
 
     override @Synchronized fun tableColumns(): Map<String, List<Pair<String, Boolean>>> {
 
@@ -107,6 +107,27 @@ internal object MysqlDialect : VendorDialect() {
         override fun toSQL(queryBuilder: QueryBuilder): String {
             return "MATCH(${expr.toSQL(queryBuilder)}) AGAINST ('$pattern' ${mode.mode()})"
         }
+    }
+
+    override fun replace(table: Table, data: List<Pair<Column<*>, Any?>>, transaction: Transaction): String {
+        val builder = QueryBuilder(true)
+        val columns = data.map { transaction.identity(it.first) }
+        val values = data.map { builder.registerArgument(it.second, it.first.columnType) }
+        return "REPLACE INTO ${transaction.identity(table)} (${columns.joinToString()}) VALUES (${values.joinToString()})"
+    }
+
+    override fun insert(ignore: Boolean, table: Table, columns: List<Column<*>>, expr: String, transaction: Transaction): String {
+        val def = super.insert(false, table, columns, expr, transaction)
+        return if (ignore) def.replaceFirst("INSERT", "INSERT IGNORE") else def
+    }
+
+    override fun delete(ignore: Boolean, table: Table, where: String?, transaction: Transaction): String {
+        val def = super.delete(ignore, table, where, transaction)
+        return if (ignore) def.replaceFirst("DELETE", "DELETE IGNORE") else def
+    }
+
+    override fun dropIndex(tableName: String, indexName: String): String {
+        return "ALTER TABLE $tableName DROP INDEX $indexName"
     }
 }
 

@@ -1,10 +1,11 @@
 package org.jetbrains.exposed.sql
 
-import org.h2.jdbc.JdbcConnection
+import org.jetbrains.exposed.sql.vendors.*
 import java.sql.Connection
 import java.sql.DatabaseMetaData
 import java.sql.DriverManager
 import java.sql.SQLException
+import java.util.concurrent.CopyOnWriteArrayList
 import javax.sql.DataSource
 
 class Database private constructor(val connector: () -> Connection) {
@@ -20,31 +21,12 @@ class Database private constructor(val connector: () -> Connection) {
 
     val url: String by lazy { metadata.url }
 
-    val vendor: DatabaseVendor by lazy {
-        val url = url
-        when {
-            url.startsWith("jdbc:mysql") -> DatabaseVendor.MySql
-            url.startsWith("jdbc:oracle") -> DatabaseVendor.Oracle
-            url.startsWith("jdbc:sqlserver") -> DatabaseVendor.SQLServer
-            url.startsWith("jdbc:postgresql") -> DatabaseVendor.PostgreSQL
-            url.startsWith("jdbc:h2") -> DatabaseVendor.H2
-            else -> error("Unknown database type $url")
-        }
+    internal val dialect by lazy {
+        val name = url.removePrefix("jdbc:").substringBefore(':')
+        dialects.firstOrNull {name == it.name} ?: error("No dialect registered for $name. URL=$url")
     }
 
-    fun vendorSupportsForUpdate(): Boolean {
-        return vendor != DatabaseVendor.H2
-    }
-
-    fun vendorCompatibleWith(): DatabaseVendor {
-        if (vendor == DatabaseVendor.H2) {
-            return ((Transaction.current().connection as? JdbcConnection)?.session as? org.h2.engine.Session)?.database?.mode?.let { mode ->
-                DatabaseVendor.values().singleOrNull { it.name.equals(mode.name, true) }
-            } ?: vendor
-        }
-
-        return vendor
-    }
+    val vendor: String get() = dialect.name
 
 
     // Overloading methods instead of default parameters for Java compatibility
@@ -97,6 +79,17 @@ class Database private constructor(val connector: () -> Connection) {
     }
 
     companion object {
+        private val dialects = CopyOnWriteArrayList<DatabaseDialect>()
+
+        init {
+            registerDialect(H2Dialect)
+            registerDialect(MysqlDialect)
+        }
+
+        fun registerDialect(dialect: DatabaseDialect) {
+            dialects.add(0, dialect)
+        }
+
         fun connect(datasource: DataSource): Database {
             return Database {
                 datasource.connection!!
@@ -126,6 +119,3 @@ val Database.name : String get() {
     }
 }
 
-enum class DatabaseVendor {
-        MySql, Oracle, SQLServer, PostgreSQL, H2
-}

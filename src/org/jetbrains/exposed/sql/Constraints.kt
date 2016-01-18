@@ -1,5 +1,6 @@
 package org.jetbrains.exposed.sql
 
+import org.jetbrains.exposed.sql.vendors.*
 import java.sql.DatabaseMetaData
 
 interface DdlAware {
@@ -66,18 +67,8 @@ data class Index(val indexName: String, val tableName: String, val columns: List
         }
     }
 
-    override fun createStatement(): String {
-        var alter = StringBuilder()
-        val indexType = if (unique) "UNIQUE " else ""
-        alter.append("CREATE ${indexType}INDEX $indexName ON $tableName ")
-        columns.joinTo(alter, ", ", "(", ")")
-        return alter.toString()
-    }
-
-    override fun dropStatement(): String {
-        val keyWord = if (Transaction.current().db.vendor == DatabaseVendor.MySql) "INDEX" else "CONSTRAINT"
-        return "ALTER TABLE $tableName DROP $keyWord $indexName"
-    }
+    override fun createStatement(): String = currentDialect.createIndex(unique, tableName, indexName, columns)
+    override fun dropStatement(): String  = currentDialect.dropIndex(tableName, indexName)
 
 
     override fun modifyStatement() = "${dropStatement()};\n${createStatement()}"

@@ -1,7 +1,7 @@
 package org.jetbrains.exposed.sql
 
+import org.jetbrains.exposed.dao.*
 import org.joda.time.DateTime
-import org.jetbrains.exposed.dao.EntityID
 
 abstract class Op<T>() : Expression<T>() {
     companion object {
@@ -76,17 +76,9 @@ class InListOrNotInListOp<T>(val expr: ExpressionWithColumnType<T>, val list: Li
                     else -> sb.append(" NOT IN (")
                 }
 
-                sb.append(when (Transaction.current().db.vendor) {
-                    DatabaseVendor.PostgreSQL -> {
-                        queryBuilder.registerArgument(list, expr.columnType)
-                    }
-
-                    else -> {
-                        list.map {
-                            queryBuilder.registerArgument(it, expr.columnType)
-                        }.joinToString(",")
-                    }
-                })
+                list.map {
+                    queryBuilder.registerArgument(it, expr.columnType)
+                }.joinTo(sb)
 
                 sb.append(")")
             }
@@ -168,13 +160,13 @@ class OrOp<out T>(val expr1: Expression<T>, val expr2: Expression<T>): Op<Boolea
 
 class exists(val query: Query) : Op<Boolean>() {
     override fun toSQL(queryBuilder: QueryBuilder): String {
-        return "EXISTS (${query.toSQL(QueryBuilder(false))})"
+        return "EXISTS (${query.prepareSQL(QueryBuilder(false))})"
     }
 }
 
 class notExists(val query: Query) : Op<Boolean>() {
     override fun toSQL(queryBuilder: QueryBuilder): String {
-        return "NOT EXISTS (${query.toSQL(QueryBuilder(false))})"
+        return "NOT EXISTS (${query.prepareSQL(QueryBuilder(false))})"
     }
 }
 
